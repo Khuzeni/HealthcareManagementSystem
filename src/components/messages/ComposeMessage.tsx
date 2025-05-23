@@ -1,23 +1,47 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Send, X, Paperclip } from 'lucide-react';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
 import { User } from '../../types';
+import { supabase } from '../../lib/supabase';
 
 interface ComposeMessageProps {
-  recipients: User[];
   onSend: (subject: string, content: string, recipientId: string) => void;
   onCancel: () => void;
 }
 
 const ComposeMessage: React.FC<ComposeMessageProps> = ({
-  recipients,
   onSend,
   onCancel
 }) => {
   const [subject, setSubject] = useState('');
   const [content, setContent] = useState('');
   const [recipientId, setRecipientId] = useState('');
+  const [availableRecipients, setAvailableRecipients] = useState<User[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchUsers = async () => {
+      try {
+        const { data: users, error } = await supabase
+          .from('users')
+          .select('id, email, name, role')
+          .in('role', ['admin', 'doctor', 'nurse'])
+          .order('role');
+
+        if (error) throw error;
+        setAvailableRecipients(users || []);
+      } catch (err) {
+        setError('Failed to load recipients');
+        console.error('Error fetching users:', err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchUsers();
+  }, []);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -25,6 +49,22 @@ const ComposeMessage: React.FC<ComposeMessageProps> = ({
       onSend(subject, content, recipientId);
     }
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex justify-center items-center p-8">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-4 bg-red-50 text-red-600 rounded-lg">
+        {error}
+      </div>
+    );
+  }
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
@@ -39,11 +79,27 @@ const ComposeMessage: React.FC<ComposeMessageProps> = ({
           required
         >
           <option value="">Select recipient</option>
-          {recipients.map((recipient) => (
-            <option key={recipient.id} value={recipient.id}>
-              {recipient.name} ({recipient.role})
-            </option>
-          ))}
+          {availableRecipients.length > 0 ? (
+            <>
+              {/* Group users by role */}
+              {['admin', 'doctor', 'nurse'].map(role => {
+                const roleUsers = availableRecipients.filter(user => user.role === role);
+                if (roleUsers.length === 0) return null;
+                
+                return (
+                  <optgroup key={role} label={role.charAt(0).toUpperCase() + role.slice(1) + 's'}>
+                    {roleUsers.map(user => (
+                      <option key={user.id} value={user.id}>
+                        {user.name} ({user.email})
+                      </option>
+                    ))}
+                  </optgroup>
+                );
+              })}
+            </>
+          ) : (
+            <option disabled>No recipients available</option>
+          )}
         </select>
       </div>
 
