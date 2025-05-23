@@ -1,7 +1,7 @@
 import React from 'react';
-import { Mail, Clock, Paperclip } from 'lucide-react';
-import { Message } from '../../types';
-import { users } from '../../utils/mockData';
+import { formatDistanceToNow } from 'date-fns';
+import { Mail, Clock, Check, CheckCheck } from 'lucide-react';
+import type { Message } from '../../types';
 
 interface MessageListProps {
   messages: Message[];
@@ -9,11 +9,6 @@ interface MessageListProps {
 }
 
 const MessageList: React.FC<MessageListProps> = ({ messages, onMessageClick }) => {
-  const getSenderName = (senderId: string) => {
-    const sender = users.find(user => user.id === senderId);
-    return sender?.name || 'Unknown User';
-  };
-
   return (
     <div className="divide-y divide-gray-200">
       {messages.map((message) => (
@@ -27,11 +22,17 @@ const MessageList: React.FC<MessageListProps> = ({ messages, onMessageClick }) =
           <div className="flex items-center justify-between">
             <div className="flex items-center">
               <Mail className={`h-5 w-5 ${message.read ? 'text-gray-400' : 'text-blue-500'}`} />
-              <span className="ml-2 font-medium text-gray-900">{getSenderName(message.senderId)}</span>
+              <span className="ml-2 font-medium text-gray-900">From: {message.senderId}</span>
+              <span className="ml-2 text-gray-600">To: {message.receiverId}</span>
             </div>
-            <div className="flex items-center text-sm text-gray-500">
-              <Clock className="h-4 w-4 mr-1" />
-              {new Date(message.timestamp).toLocaleDateString()}
+            <div className="flex items-center space-x-2 text-sm text-gray-500">
+              <Clock className="h-4 w-4" />
+              <span>{formatDistanceToNow(new Date(message.timestamp), { addSuffix: true })}</span>
+              {message.read ? (
+                <CheckCheck className="h-4 w-4 text-blue-500" />
+              ) : (
+                <Check className="h-4 w-4 text-gray-400" />
+              )}
             </div>
           </div>
           <h3 className={`mt-1 text-sm ${message.read ? 'text-gray-500' : 'text-gray-900 font-medium'}`}>
@@ -40,12 +41,6 @@ const MessageList: React.FC<MessageListProps> = ({ messages, onMessageClick }) =
           <p className="mt-1 text-sm text-gray-500 line-clamp-2">
             {message.content}
           </p>
-          {message.attachments && message.attachments.length > 0 && (
-            <div className="mt-2 flex items-center text-sm text-gray-500">
-              <Paperclip className="h-4 w-4 mr-1" />
-              {message.attachments.length} attachment(s)
-            </div>
-          )}
         </div>
       ))}
     </div>

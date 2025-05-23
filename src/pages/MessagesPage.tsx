@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { MessageSquare, Plus, Search } from 'lucide-react';
 import Navbar from '../components/layout/Navbar';
 import Sidebar from '../components/layout/Sidebar';
@@ -7,163 +7,117 @@ import MessageList from '../components/messages/MessageList';
 import ComposeMessage from '../components/messages/ComposeMessage';
 import ViewMessage from '../components/messages/ViewMessage';
 import { useAuth } from '../context/AuthContext';
-import { Message } from '../types';
-import { users } from '../utils/mockData';
-
-// Mock messages data
-const mockMessages: Message[] = [
-  {
-    id: 'msg1',
-    senderId: 'user2', // doctor
-    receiverId: 'user4', // patient
-    subject: 'Follow-up Appointment Results',
-    content: 'Your recent test results look good. Keep up with the prescribed medication.',
-    timestamp: new Date().toISOString(),
-    read: false
-  },
-  {
-    id: 'msg2',
-    senderId: 'user4', // patient
-    receiverId: 'user2', // doctor
-    subject: 'Question about Medication',
-    content: 'I\'ve been experiencing some side effects from the new medication.',
-    timestamp: new Date(Date.now() - 86400000).toISOString(), // 1 day ago
-    read: true
-  }
-];
+import { supabase, subscribeToMessages } from '../lib/supabase';
+import type { Message } from '../types';
 
 const MessagesPage: React.FC = () => {
   const { user } = useAuth();
-  const [messages, setMessages] = useState<Message[]>(mockMessages);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [isComposing, setIsComposing] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedMessage, setSelectedMessage] = useState<Message | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Filter messages based on user role
-  const filteredMessages = messages.filter(message => 
-    (message.senderId === user?.id || message.receiverId === user?.id) &&
-    (message.subject.toLowerCase().includes(searchTerm.toLowerCase()) ||
-     message.content.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+  useEffect(() => {
+    if (!user) return;
 
-  // Get available recipients based on user role
-  const getAvailableRecipients = () => {
-    if (user?.role === 'doctor') {
-      return users.filter(u => u.role === 'patient');
-    } else if (user?.role === 'patient') {
-      return users.filter(u => u.role === 'doctor');
-    }
-    return [];
-  };
+    // Fetch initial messages
+    const fetchMessages = async () => {
+      const { data, error } = await supabase
+        .from('messages')
+        .select('*')
+        .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`)
+        .order('created_at', { ascending: false });
 
-  const handleSendMessage = (subject: string, content: string, recipientId: string) => {
-    const newMessage: Message = {
-      id: `msg${Date.now()}`,
-      senderId: user?.id || '',
-      receiverId: recipientId,
+      if (error) {
+        console.error('Error fetching messages:', error);
+      } else {
+        setMessages(data || []);
+      }
+      setIsLoading(false);
+    };
+
+    fetchMessages();
+
+    // Subscribe to real-time updates
+    const subscription = subscribeToMessages(user.id, (payload) => {
+      if (payload.eventType === 'INSERT') {
+        setMessages((prev) => [payload.new, ...prev]);
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [user]);
+
+  const handleSendMessage = async (subject: string, content: string, recipientId: string) => {
+    if (!user) return;
+
+    const { error } = await supabase.from('messages').insert({
+      sender_id: user.id,
+      receiver_id: recipientId,
       subject,
       content,
-      timestamp: new Date().toISOString(),
-      read: false
-    };
-    
-    setMessages(prev => [newMessage, ...prev]);
-    setIsComposing(false);
+    });
+
+    if (error) {
+      console.error('Error sending message:', error);
+    } else {
+      setIsComposing(false);
+    }
   };
 
-  const handleMessageClick = (message: Message) => {
+  const handleMessageClick = async (message: Message) => {
     // Mark message as read if the current user is the receiver
     if (message.receiverId === user?.id && !message.read) {
-      setMessages(prev => prev.map(msg => 
-        msg.id === message.id ? { ...msg, read: true } : msg
-      ));
+      const { error } = await supabase
+        .from('messages')
+        .update({ read_at: new Date().toISOString() })
+        .eq('id', message.id);
+
+      if (error) {
+        console.error('Error marking message as read:', error);
+      } else {
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === message.id ? { ...msg, read: true } : msg
+          )
+        );
+      }
     }
     setSelectedMessage(message);
   };
 
-  const handleReply = (content: string) => {
-    if (selectedMessage && user) {
-      const replyMessage: Message = {
-        id: `msg${Date.now()}`,
-        senderId: user.id,
-        receiverId: selectedMessage.senderId,
-        subject: `Re: ${selectedMessage.subject}`,
-        content,
-        timestamp: new Date().toISOString(),
-        read: false
-      };
-      
-      setMessages(prev => [replyMessage, ...prev]);
-      setSelectedMessage(null);
-    }
-  };
+  const handleReply = async (content: string) => {
+    if (!selectedMessage || !user) return;
 
-  const renderContent = () => {
-    if (isComposing) {
-      return (
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <h2 className="text-xl font-semibold text-gray-900 mb-6">Compose Message</h2>
-          <ComposeMessage
-            recipients={getAvailableRecipients()}
-            onSend={handleSendMessage}
-            onCancel={() => setIsComposing(false)}
-          />
-        </div>
-      );
-    }
-
-    if (selectedMessage) {
-      return (
-        <ViewMessage
-          message={selectedMessage}
-          onBack={() => setSelectedMessage(null)}
-          onReply={handleReply}
-        />
-      );
-    }
-
-    return (
-      <>
-        <div className="mb-6">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
-            <input
-              type="search"
-              placeholder="Search messages..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-        </div>
-
-        <div className="bg-white rounded-lg shadow-md overflow-hidden">
-          {filteredMessages.length > 0 ? (
-            <MessageList
-              messages={filteredMessages}
-              onMessageClick={handleMessageClick}
-            />
-          ) : (
-            <div className="p-8 text-center">
-              <MessageSquare className="mx-auto h-12 w-12 text-gray-400" />
-              <h3 className="mt-2 text-sm font-medium text-gray-900">No messages</h3>
-              <p className="mt-1 text-sm text-gray-500">
-                Get started by sending a new message.
-              </p>
-            </div>
-          )}
-        </div>
-      </>
+    await handleSendMessage(
+      `Re: ${selectedMessage.subject}`,
+      content,
+      selectedMessage.senderId
     );
+    setSelectedMessage(null);
   };
+
+  const filteredMessages = messages.filter((message) =>
+    message.subject.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    message.content.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
       <Navbar />
-      
       <div className="flex">
         <Sidebar />
-        
         <main className="flex-1 p-8">
           <div className="max-w-4xl mx-auto">
             <div className="flex justify-between items-center mb-8">
@@ -181,7 +135,53 @@ const MessagesPage: React.FC = () => {
               )}
             </div>
 
-            {renderContent()}
+            {isComposing ? (
+              <div className="bg-white rounded-lg shadow-md p-6">
+                <h2 className="text-xl font-semibold text-gray-900 mb-6">Compose Message</h2>
+                <ComposeMessage
+                  onSend={handleSendMessage}
+                  onCancel={() => setIsComposing(false)}
+                />
+              </div>
+            ) : selectedMessage ? (
+              <ViewMessage
+                message={selectedMessage}
+                onBack={() => setSelectedMessage(null)}
+                onReply={handleReply}
+              />
+            ) : (
+              <>
+                <div className="mb-6">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                    <input
+                      type="search"
+                      placeholder="Search messages..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-lg shadow-md overflow-hidden">
+                  {filteredMessages.length > 0 ? (
+                    <MessageList
+                      messages={filteredMessages}
+                      onMessageClick={handleMessageClick}
+                    />
+                  ) : (
+                    <div className="p-8 text-center">
+                      <MessageSquare className="mx-auto h-12 w-12 text-gray-400" />
+                      <h3 className="mt-2 text-sm font-medium text-gray-900">No messages</h3>
+                      <p className="mt-1 text-sm text-gray-500">
+                        Get started by sending a new message.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
           </div>
         </main>
       </div>
