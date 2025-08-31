@@ -1,7 +1,7 @@
 import { 
   User, Patient, Doctor, Appointment, Ward, 
   Admittance, MedicalRecord, Lab, Medicine, 
-  Prescription, OrderLine 
+  Prescription, OrderLine, Staff, Shift
 } from '../types';
 
 // Mock Users
@@ -24,7 +24,7 @@ export const users: User[] = [
     id: 'user3',
     email: 'nurse@hospital.com',
     name: 'Nurse Robert Chen',
-    role: 'nurse',
+    role: 'patient',
     avatar: 'https://images.pexels.com/photos/6129507/pexels-photo-6129507.jpeg?auto=compress&cs=tinysrgb&w=150'
   },
   {
@@ -33,6 +33,30 @@ export const users: User[] = [
     name: 'Jane Smith',
     role: 'patient',
     avatar: 'https://images.pexels.com/photos/5327656/pexels-photo-5327656.jpeg?auto=compress&cs=tinysrgb&w=150'
+  },
+  {
+    id: 'user5',
+    email: 'dr.wilson@hospital.com',
+    name: 'Dr. James Wilson',
+    role: 'doctor'
+  },
+  {
+    id: 'user6',
+    email: 'nurse.maria@hospital.com',
+    name: 'Maria Rodriguez',
+    role: 'patient'
+  },
+  {
+    id: 'user7',
+    email: 'tech.david@hospital.com',
+    name: 'David Kim',
+    role: 'patient'
+  },
+  {
+    id: 'user8',
+    email: 'nurse.lisa@hospital.com',
+    name: 'Lisa Thompson',
+    role: 'patient'
   }
 ];
 
@@ -342,3 +366,149 @@ export const orderLines: OrderLine[] = [
     instructions: 'Take at onset of migraine. Do not exceed 9 tablets per month'
   }
 ];
+
+// Mock Staff
+export const staff: Staff[] = [
+  {
+    id: 'staff1',
+    userId: 'user2',
+    firstName: 'Sarah',
+    lastName: 'Johnson',
+    role: 'doctor',
+    department: 'Cardiology',
+    contactNumber: '555-4321',
+    email: 'dr.sarah@hospital.com',
+    employeeId: 'EMP001',
+    shifts: []
+  },
+  {
+    id: 'staff2',
+    userId: 'user5',
+    firstName: 'James',
+    lastName: 'Wilson',
+    role: 'doctor',
+    department: 'Neurology',
+    contactNumber: '555-8642',
+    email: 'dr.wilson@hospital.com',
+    employeeId: 'EMP002',
+    shifts: []
+  },
+  {
+    id: 'staff3',
+    userId: 'user3',
+    firstName: 'Robert',
+    lastName: 'Chen',
+    role: 'nurse',
+    department: 'ICU',
+    contactNumber: '555-7890',
+    email: 'nurse.robert@hospital.com',
+    employeeId: 'EMP003',
+    shifts: []
+  },
+  {
+    id: 'staff4',
+    userId: 'user6',
+    firstName: 'Maria',
+    lastName: 'Rodriguez',
+    role: 'nurse',
+    department: 'Emergency',
+    contactNumber: '555-3456',
+    email: 'nurse.maria@hospital.com',
+    employeeId: 'EMP004',
+    shifts: []
+  },
+  {
+    id: 'staff5',
+    userId: 'user7',
+    firstName: 'David',
+    lastName: 'Kim',
+    role: 'technician',
+    department: 'Radiology',
+    contactNumber: '555-6789',
+    email: 'tech.david@hospital.com',
+    employeeId: 'EMP005',
+    shifts: []
+  },
+  {
+    id: 'staff6',
+    userId: 'user8',
+    firstName: 'Lisa',
+    lastName: 'Thompson',
+    role: 'nurse',
+    department: 'Pediatrics',
+    contactNumber: '555-2345',
+    email: 'nurse.lisa@hospital.com',
+    employeeId: 'EMP006',
+    shifts: []
+  }
+];
+
+// Mock Shifts - Generate shifts for the current week
+const generateShifts = (): Shift[] => {
+  const shifts: Shift[] = [];
+  const today = new Date();
+  const currentWeekStart = new Date(today.setDate(today.getDate() - today.getDay()));
+  
+  // Generate shifts for each day of the week
+  for (let dayOffset = 0; dayOffset < 7; dayOffset++) {
+    const shiftDate = new Date(currentWeekStart);
+    shiftDate.setDate(currentWeekStart.getDate() + dayOffset);
+    const dateString = shiftDate.toISOString().split('T')[0];
+    
+    // Morning shifts
+    shifts.push(
+      {
+        id: `shift_${dayOffset}_1`,
+        staffId: 'staff1',
+        date: dateString,
+        startTime: '07:00',
+        endTime: '15:00',
+        type: 'regular',
+        status: dayOffset < new Date().getDay() ? 'completed' : dayOffset === new Date().getDay() ? 'active' : 'scheduled',
+        department: 'Cardiology'
+      },
+      {
+        id: `shift_${dayOffset}_2`,
+        staffId: 'staff3',
+        date: dateString,
+        startTime: '06:00',
+        endTime: '18:00',
+        type: 'regular',
+        status: dayOffset < new Date().getDay() ? 'completed' : dayOffset === new Date().getDay() ? 'active' : 'scheduled',
+        department: 'ICU'
+      }
+    );
+    
+    // Evening shifts
+    if (dayOffset % 2 === 0) {
+      shifts.push({
+        id: `shift_${dayOffset}_3`,
+        staffId: 'staff4',
+        date: dateString,
+        startTime: '18:00',
+        endTime: '06:00',
+        type: 'regular',
+        status: dayOffset < new Date().getDay() ? 'completed' : dayOffset === new Date().getDay() ? 'active' : 'scheduled',
+        department: 'Emergency'
+      });
+    }
+    
+    // Weekend shifts
+    if (dayOffset === 0 || dayOffset === 6) {
+      shifts.push({
+        id: `shift_${dayOffset}_4`,
+        staffId: 'staff2',
+        date: dateString,
+        startTime: '08:00',
+        endTime: '20:00',
+        type: 'regular',
+        status: dayOffset < new Date().getDay() ? 'completed' : dayOffset === new Date().getDay() ? 'active' : 'scheduled',
+        department: 'Neurology'
+      });
+    }
+  }
+  
+  return shifts;
+};
+
+export const shifts: Shift[] = generateShifts();

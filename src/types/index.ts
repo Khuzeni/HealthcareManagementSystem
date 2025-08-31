@@ -157,6 +157,30 @@ export interface Message {
   }[];
 }
 
+export interface Staff {
+  id: string;
+  userId: string;
+  firstName: string;
+  lastName: string;
+  role: 'doctor' | 'nurse' | 'technician' | 'admin';
+  department: string;
+  contactNumber: string;
+  email: string;
+  employeeId: string;
+  shifts: Shift[];
+}
+
+export interface Shift {
+  id: string;
+  staffId: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  type: 'regular' | 'overtime' | 'on-call' | 'emergency';
+  status: 'scheduled' | 'active' | 'completed' | 'cancelled';
+  department: string;
+}
+
 // Permission types for role-based access control
 export type Permission =
   | 'manage_users'
